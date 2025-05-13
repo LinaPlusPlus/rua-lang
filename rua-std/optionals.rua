@@ -1,0 +1,11 @@
+
+trait Optional {}
+
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+impl Optional for Option {
+
+}

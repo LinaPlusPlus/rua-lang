@@ -1,0 +1,21 @@
+allow magic
+
+
+struct Any {}
+
+// a step up from `Any`. where `Any` is an object that cannot have almost any assumptions made about it,
+// `Runtime` is assumed to have the ability to have keys, the linker will deturmine how to inturprate getting and setting the index.
+struct Runtime {
+    magic accessors_defer_to_linker
+    magic hint_any
+}
+
+struct RuntimeMap {
+    magic accessors_defer_to_linker
+    magic hint_hash_map
+}
+
+struct RuntimeKeys {
+    magic accessors_defer_to_linker
+    magic hint_key_value_pair
+}

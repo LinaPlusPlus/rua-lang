@@ -1,0 +1,18 @@
+
+struct String {}
+struct ToString {}
+
+impl ToString for String {
+    inline function(self){
+        alias tostring = namedGlobal "tostring";
+        return tostring(self)
+    }
+}
+
+impl Range for String {
+    inline function(self:Self,begin:int,end:int){
+        native {
+            $self:sub(begin,end)
+        }
+    }
+}
