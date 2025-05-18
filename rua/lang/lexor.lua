@@ -141,7 +141,7 @@ local function lexInvoke(in_stream,allow_unknown_chars)
     local co = coroutine.create(function()
         lex_body();
         --emit("!","OVER");
-        emit(nil)
+        emit(nil);
     end)
 
     local function iterator ()

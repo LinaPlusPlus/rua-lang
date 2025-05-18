@@ -2,7 +2,7 @@ local parser = require "rua-lang.parser";
 local dump  = require "rua-cli.kooldump";
 local lexor = require "rua-lang.lexor";
 
-local mainfilePath = ...;
+local mainfilePath,arg = ...;
 local mainFile = assert(io.open(mainfilePath,"r"));
 
 local ok,err = parser(mainfilePath,lexor(mainFile));

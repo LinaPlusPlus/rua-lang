@@ -19,7 +19,11 @@ local function lexor_to_string(tok_type,tok_data)
     if not tok_type then
         return "*EndOfFile*";
     end
-    out = lexor_to_name[tok_type] or ("<unknown token %q with %q>"):format(tostring(tok_type),tostring(tok_data));
+    if tok_type == "_" then
+        out = ("<word %q>"):format(tok_data)
+    else
+        out = lexor_to_name[tok_type] or ("<unknown token %q with %q>"):format(tostring(tok_type),tostring(tok_data));
+    end
     return out
 end
 
@@ -37,6 +41,7 @@ local function parse(fileName,iterFn,tok_type)
 
     local fail;
     local tok_data,tok_line,tok_col;
+    local motive;
     local nxtok_type,nxtok_data,nxtok_line,nxtok_col;
 
     local function warn(class,header,msg,...)
@@ -63,6 +68,10 @@ local function parse(fileName,iterFn,tok_type)
 
     local unit_statement,unit_enum,unit_type;
 
+    local function setup_statement(statement,type)
+        statement.type = statement.type or type;
+    end
+
     --END HEADER
 
     --BEGIN parts
@@ -83,8 +92,8 @@ local function parse(fileName,iterFn,tok_type)
                 fail = ("Expected word afrter '.', got `%s`"):format(lexor_to_string(tok_type,tok_data));
                 return
             end
-            pull()
             table.insert(path,tok_data);
+            pull()
         end
 
 
@@ -119,10 +128,72 @@ local function parse(fileName,iterFn,tok_type)
 
         return statement;
     end
+
+
+    function part_struct(statement)
+
+        setup_statement(statement,"structDef");
+
+        local body = statement.body or {};
+        statement.body = body;
+
+        if tok_type ~= "{" then
+            fail = ("Expected `%s { ... }` got `enum <word:name> %s `"):format(statement.type,lexor_to_string(tok_type,tok_data));
+        end
+        statement.line,statement.col = tok_line,tok_col;
+        pull()
+
+        local item = {};
+        while true do
+            if tok_type == "#" then
+                pull();
+                --TODO parse hash qualifiers
+            elseif tok_type == "_" or tok_type == "\"" then
+                item.name = tok_data;
+                pull()
+                if tok_type ~= ":" then
+                    fail = ("In %s Expected `%s: <typeDefinition>` got `%s %s`"):format(statement.type,itemName,itemName,lexor_to_string(tok_type,tok_data));
+                end
+                pull();
+                item.def = part_typedef({});
+
+            elseif tok_type == "}" then
+                pull();
+                break;
+            else
+                fail = ("In %s, expected list of `<name>: <type>` ended by '}' got %s"):format(statement.type,lexor_to_string(tok_type,tok_data));
+            end
+            if fail then return end
+        end
+        return statement;
+    end
+
     --END parts
 
     --BEGIN statements
+    function statement_loop(statement,takeLast)
+        setup_statement(statement,"loop")
+
+        local oldMotive = motive;
+        motive = "loop"
+        local function takeLast(peek)
+            if peek then
+                return nil;
+            end
+            fail = ("Loop statement cannot be taken"):format()
+        end
+
+        local returned = statement_any({},takeLast);
+        motive = oldMotive;
+
+        statement.body = returned;
+        return statement;
+    end
+
     function statement_many(statement,takeLast)
+
+        setup_statement(statement,"many")
+
         statement.body = {};
         local body = statement.body;
 
@@ -148,28 +219,70 @@ local function parse(fileName,iterFn,tok_type)
         return statement;
     end
 
-    function statement_linkerRaw(statement,takeLast)
+    function statement_call(statement,takeLast)
+        local ender = statement.ender or ")";
+        setup_statement(statement,"call")
 
-        if tok_type ~= "{" then
-            fail = ("Expected `linkerRaw { ... }` got `linkerRaw %s ???`"):format(lexor_to_string(tok_type,tok_data));
+        local body = statement.body or {};
+        statement.body = body;
+
+        local function giveLast(peek)
+            local a = body[#body];
+            if not peek then
+                body[#body] = nil;
+            end
+            return a;
         end
 
-         while true do
-            if tok_type == "}" then
+        while true do
+            if tok_type == ender then
                 pull();
                 break;
             else
-                local got = statement_any({},takeLast);
+                local got = statement_any({},giveLast);
                 table.insert(body,got);
             end
             if fail then return end
         end
+
+        return statement;
+    end
+
+    function statement_linkerRaw(statement,takeLast)
+
+        setup_statement(statement,"linker_raw")
+
+        local body = {};
+
+        if tok_type ~= "{" then
+            fail = ("Expected `linkerRaw { ... }` got `linkerRaw %s ...`"):format(lexor_to_string(tok_type,tok_data));
+        end
+
+         while true do
+            local print = false;
+
+            if tok_type == "}" then
+                pull();
+                break;
+            elseif tok_type == "{" then
+
+            end
+            if print then
+                table.insert(body,tok_type);
+                table.insert(body,tok_data);
+            end
+            if fail then return end
+        end
+
+        statement.body = body;
+        return statement;
     end
 
     function statement_any(statement,takeLast)
         if tok_type == "_" then
             if tok_data == "linkerRaw" then
-
+                pull();
+                statement_linkerRaw({type="linker_raw"})
             else
                 local l = {
                     type="word",
@@ -197,7 +310,7 @@ local function parse(fileName,iterFn,tok_type)
                 pull();
                 return l
             else
-                fail = ("Expected word afrter '.', got `%s`"):format(lexor_to_string(tok_type,tok_data));
+                fail = ("Expected word after '.', got `%s`"):format(lexor_to_string(tok_type,tok_data));
                 pull()
                 return
             end
@@ -205,6 +318,13 @@ local function parse(fileName,iterFn,tok_type)
             pull();
             local state = {type="brackets"};
             return statement_many(state);
+        elseif tok_type == "(" then
+            pull();
+            local last = takeLast(true);
+            if last then takeLast() end
+
+            local state = {type="call",ender=")",lhs=last};
+            return statement_call(state);
         else
             fail = ("In statement, Unexpected %s"):format(lexor_to_string(tok_type,tok_data));
             return {type="fail"}
@@ -214,6 +334,21 @@ local function parse(fileName,iterFn,tok_type)
     --END statements
 
     --BEGIN units
+
+    function unit_struct(statement,takeLast)
+        setup_statement(statement,"struct");
+
+        if not statement.id then
+            statement.id = part_static_accessor({});
+        end
+        pull();
+
+        local function takeLast(peek)
+            return nil;
+        end
+        statement = part_struct(statement,takeLast);
+        return statement;
+    end
 
     function unit_function(statement,parent)
         statement.lhs = part_static_accessor({});
@@ -322,11 +457,15 @@ local function parse(fileName,iterFn,tok_type)
         return statement;
     end
 
+
+
     function unit_toplevel(statement)
         while tok_type and not fail do --BEGIN while
             print(tok_type,tok_data,tok_line,tok_col);
             if tok_type == "_" then
-                if tok_data == "enum" then
+                if tok_data == "struct" then
+                    unit_struct({type="struct"});
+                elseif tok_data == "enum" then
                     pull();
                     unit_enum({type="enum",variants={}},statement);
                 elseif tok_data == "function" then

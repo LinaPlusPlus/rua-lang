@@ -1,8 +1,0 @@
-
-global GlobalTable: Runtime {
-    native {
-        _G
-    }
-}
-
-global

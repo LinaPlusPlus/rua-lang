@@ -1,0 +1,67 @@
+use engine_primitives {
+    emitAction,
+    emitHint,
+    hasTrait,
+    unsized,
+}
+pub use engine_primitives {
+
+    // this primitive tells the compiler to try to accomidate
+
+    // these are OUR primitives
+    // the linker has other ones
+    // that can decide things like number width
+    // verry C-style
+    StaticString,
+    StaticNumber,
+    bool,
+    null,
+}
+
+struct NilOption {};
+
+trait Optional<T> {
+    isSome(self) -> bool,
+    isNone(self) -> bool,
+    intoEnum(self) -> Option<T>,
+
+}
+
+trait Any {}
+
+impl<T: > Any for T {
+
+}
+
+impl String {};
+
+pub trait keyed {
+    #[inline]
+    fn getKeyed(self, key: dyn String) {
+        let result = emitAction2("GetStringKey",self,key);
+        return result;
+    }
+    #[inline]
+    fn getKeyed(self, key: dyn Any) {
+        emitAction2("hint","debugAssert");
+        emitAction2("assertType",key);
+
+        let result = emitAction2("GetKey",self,key);
+        return result;
+    }
+}
+
+pub struct number {
+
+}
+pub struct string {
+
+}
+
+pub Global {
+
+}
+
+impl Keyed.string for Global {
+
+}
